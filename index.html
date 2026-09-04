@@ -3773,6 +3773,12 @@ compreendeu e concorda integralmente com este Termo.</pre
 
       <div class="field"><label>Preço venda (R$)</label><input id="qkPreco" type="text" inputmode="decimal" placeholder="0,00" oninput="moedaInput(this)" onblur="moedaBlur(this)"></div>
     </div>
+    ${
+    // @erro: falta condição de tipo de produto serviço
+      false === true
+      ? ""
+      : `<div class="field"><label>Estoque inicial</label><input id="qkEstoque" type="number" value="0"></div>`
+    }
     <div class="field"><label>Estoque inicial</label><input id="qkEstoque" type="number" value="0"></div>
   `,
           `
@@ -3807,6 +3813,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         const btn = $("qkSaveBtn")
         btn.disabled = true
         btn.innerHTML = '<span class="spinner"></span> Salvando...'
+        // @erro: uso de try/catch. Usamos cláusulas de guarda
         try {
           const { data, error } = await sb
             .from("chaves")
@@ -3814,7 +3821,7 @@ compreendeu e concorda integralmente com este Termo.</pre
             .select()
             .single()
           if (error) throw error
-          if (dados.estoque > 0) {
+          if (dados.estoque > 0 && dados.tipo_produto !== "servico") {
             // if(error) throw: sem checar, a movimentacao de estoque inicial
             // poderia falhar em silencio e o produto nasceria com estoque 0.
             const { error: movErr } = await sb.from("movimentacoes").insert({
@@ -5030,10 +5037,12 @@ compreendeu e concorda integralmente com este Termo.</pre
         return CACHE.transacoes
       }
       async function carregarMovimentacoes() {
+      // @erro: uso ambíguo de view movimentacoes e tabela movimentacoes_estoque
         function consultar() {
           return sb
-            .from("movimentacoes")
-            .select("*")
+            .from("movimentacoes_estoque")
+            .select("*, produtos!chave_id!inner(tipo_produto)")
+            .neq("produtos.tipo_produto", "servico")
             .order("id", { ascending: false })
             .limit(300)
         }
@@ -5291,12 +5300,16 @@ compreendeu e concorda integralmente com este Termo.</pre
         // navegador; padrao 8.
         const limiteInicial = limitePainel()
         const estoqueBaixo = CACHE.chaves
-          .filter(
-            (k) =>
+          // @erro: arrow functions reduzem a legibilidade e manunenabilidade do programa
+          // @erro: "servico" como hardcoded reduz a legibilidade e manutenibilidade do programa
+          // @sugestao: varrer o programa e refatorar instâncias marcadas como erro
+          .filter((k) => {
+            return (
               k.estoque_min > 0 &&
               k.estoque <= k.estoque_min &&
-              k.tipo_produto !== "servico",
-          )
+              k.tipo_produto !== "servico"
+            )
+          })
           .sort((a, b) => a.estoque / a.estoque_min - b.estoque / b.estoque_min)
           .slice(0, limiteInicial)
 
@@ -5886,14 +5899,34 @@ compreendeu e concorda integralmente com este Termo.</pre
         }
         // Valor total do estoque (valuation): soma de quantidade em estoque × custo
         // e × preço de venda dos produtos listados (CACHE.chaves já traz só os ativos).
+        // @sugestao:
+        /*
+        const totais = lista.reduce(
+          (acumulador, k) => {
+            if (k.tipo_produto === "servico") {
+              return acumulador;
+            }
+            const estoque = Number(k.estoque) || 0;
+            const custo = Number(k.preco_custo) || 0;
+            const venda = Number(k.preco_venda) || 0;
+            acumulador.valorCusto += estoque * custo;
+            acumulador.valorVenda += estoque * venda;
+            return acumulador;
+          },
+          { valorCusto: 0, valorVenda: 0 } // Initialize as an object with both counters
+        );
+        const { valorCusto, valorVenda } = totais;
+        */
         const valorCusto = lista.reduce((soma, k) => {
-          // Serviço (mão de obra) não tem estoque físico: fica fora da valuation
-          // mesmo que venha com números "sujos" no cadastro.
-          if (k.tipo_produto === "servico") return soma
+          if (k.tipo_produto === "servico") {
+            return soma
+          }
           return soma + (Number(k.estoque) || 0) * (Number(k.preco_custo) || 0)
         }, 0)
         const valorVenda = lista.reduce((soma, k) => {
-          if (k.tipo_produto === "servico") return soma
+          if (k.tipo_produto === "servico") {
+            return soma
+          }
           return soma + (Number(k.estoque) || 0) * (Number(k.preco_venda) || 0)
         }, 0)
         // Valor financeiro do estoque é dado do dono: só monta o resumo para quem
@@ -5905,13 +5938,17 @@ compreendeu e concorda integralmente com este Termo.</pre
     <strong>Valor em estoque (custo):</strong> ${fmt(valorCusto)} · <strong>a preço de venda:</strong> ${fmt(valorVenda)}
   </div>`
         }
+        // @erro: interpolação de strings reduz legibilidade e manutenabilidade
         $("chList").innerHTML =
           resumoEstoque +
           `<table>
     <thead><tr><th>Tipo</th><th>Código</th><th>Fabricante</th><th>Descrição</th><th>Res./Auto.</th><th>Categoria</th><th>Preço</th><th>Unidade</th><th>Estoque</th><th></th></tr></thead>
     <tbody>${lista
       .map((k) => {
-        const baixo = k.estoque_min > 0 && k.estoque <= k.estoque_min
+        const baixo =
+          k.estoque_min > 0 &&
+          k.estoque <= k.estoque_min &&
+          k.tipo_produto !== "servico"
         const tp = k.tipo_produto || "chave"
         return `<tr>
         <td><span title="${esc(rotuloTipoProduto(tp))}">${iconeTipoProduto(tp)} ${esc(rotuloTipoProduto(tp))}</span></td>
@@ -5925,7 +5962,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         <td>${baixo ? `<span class="badge b-baixo">${k.estoque}/${k.estoque_min}</span>` : k.estoque + (k.estoque_min ? " / min " + k.estoque_min : "")}</td>
         <td class="actions">
           <button class="btn btn-sec btn-sm" onclick='chaveForm(${JSON.stringify(k).replace(/'/g, "&#39;")})'>Editar</button>
-          <button class="btn btn-sec btn-sm" onclick="estoqueMovForm(${k.id})" title="Movimentar estoque">📦 Estoque</button>
+          ${k.tipo_produto === "servico" ? "" : `<button class="btn btn-sec btn-sm" onclick="estoqueMovForm(${k.id})" title="Movimentar estoque">📦 Estoque</button>`}
           <button class="btn btn-danger btn-sm" onclick="chaveExcluir(${k.id})">Excluir</button>
         </td></tr>`
       })
@@ -6014,6 +6051,10 @@ compreendeu e concorda integralmente com este Termo.</pre
           toast("Cadastre um fabricante primeiro", "err")
           return
         }
+        // @erro: campos fabricante e unidade de medida não fazem sentido para
+        // produtos do tipo serviço
+        // @erro: renderização condicional exige que o programa
+        // renderize novamente ao mudar o tipo do produto      
         const abrir = contexto ? openModal2 : openModal
         abrir(
           edit ? "Editar Produto" : "Novo Produto",
@@ -6081,8 +6122,8 @@ compreendeu e concorda integralmente com este Termo.</pre
     </div>
     <div class="row-3">
       <div class="field"><label>Preço venda</label><input id="chPrecoV" type="number" step="0.01" value="${k.preco_venda}"></div>
-      <div class="field" id="chCampoCusto"><label>Custo</label><input id="chPrecoC" type="number" step="0.01" value="${k.preco_custo}"></div>
-      <div class="field" id="chCampoEstMin"><label>Estoque mín.</label><input id="chEstMin" type="number" value="${k.estoque_min}"></div>
+      ${k.tipo_produto === "servico" && true == false ? "" : `<div class="field" id="chCampoCusto"><label>Custo</label><input id="chPrecoC" type="number" step="0.01" value="${k.preco_custo}"></div>`}
+      ${k.tipo_produto === "servico" && true == false ? "" : `<div class="field" id="chCampoEstoqueMinimo"><label>Estoque mín.</label><input id="chEstMin" type="number" value="${k.estoque_min}"></div>`}
     </div>
     <div class="field">
       <label>Foto do produto</label>
@@ -6090,7 +6131,7 @@ compreendeu e concorda integralmente com este Termo.</pre
       <img id="chImgPreview" alt="" style="display:none;max-width:120px;max-height:120px;margin-top:8px;border-radius:8px;border:1px solid var(--border)">
       <button type="button" class="btn btn-sec btn-sm" id="chImgRemover" style="display:none;margin-top:6px" onclick="chaveRemoverImg()">Remover foto</button>
     </div>
-    ${!edit ? '<div class="field" id="chCampoEstoqueInicial"><label>Estoque inicial</label><input id="chEstoque" type="number" value="0"></div>' : ""}
+    ${edit === true || (k.tipo_produto === "servico" && true == false) ? "" : '<div class="field" id="chCampoEstoqueInicial"><label>Estoque inicial</label><input id="chEstoque" type="number" value="0"></div>'}
   `,
           `
     <button class="btn btn-sec" onclick="${contexto ? "closeModal2()" : "closeModal()"}">Cancelar</button>
@@ -6127,12 +6168,14 @@ compreendeu e concorda integralmente com este Termo.</pre
       function chaveAtualizarCamposServico() {
         const ehServico =
           $("chTipoProduto") && $("chTipoProduto").value === "servico"
-        ;["chCampoCusto", "chCampoEstMin", "chCampoEstoqueInicial"].forEach(
-          (idCampo) => {
-            const campo = $(idCampo)
-            if (campo) campo.style.display = ehServico ? "none" : ""
-          },
-        )
+        ;[
+          "chCampoCusto",
+          "chCampoEstoqueMinimo",
+          "chCampoEstoqueInicial",
+        ].forEach((idCampo) => {
+          const campo = $(idCampo)
+          if (campo) campo.style.display = ehServico ? "none" : ""
+        })
       }
       async function chaveSalvar(id, contexto) {
         const dados = {
@@ -6143,9 +6186,9 @@ compreendeu e concorda integralmente com este Termo.</pre
           tipo: $("chTipo").value,
           unidade_medida: $("chUnidade").value,
           categoria: $("chCat").value.trim(),
-          preco_venda: parseFloat($("chPrecoV").value || 0),
-          preco_custo: parseFloat($("chPrecoC").value || 0),
-          estoque_min: parseInt($("chEstMin").value || 0),
+          preco_venda: parseFloat(($("chPrecoV") ?? 0)?.value || 0),
+          preco_custo: parseFloat(($("chPrecoC") ?? 0)?.value || 0),
+          estoque_min: parseInt(($("chEstMin") ?? 0)?.value || 0),
           ativo: true,
         }
         // Serviço não tem custo de estoque nem quantidade: grava 0 nesses campos.
@@ -6182,7 +6225,9 @@ compreendeu e concorda integralmente com este Termo.</pre
             }
             toast("Produto atualizado")
           } else {
-            dados.estoque = ehServico ? 0 : parseInt($("chEstoque").value || 0)
+            dados.estoque = ehServico
+              ? 0
+              : parseInt(($("chEstoque") ?? 0)?.value || 0)
             function executarInsertOnline() {
               return sb.from("chaves").insert(dados).select().single()
             }
@@ -6215,7 +6260,7 @@ compreendeu e concorda integralmente com este Termo.</pre
               return
             }
             // registra movimentação de estoque inicial
-            if (dados.estoque > 0) {
+            if (dados.estoque > 0 && dados.tipo_produto !== "servico") {
               // if(error) throw: sem checar, o estoque inicial poderia falhar
               // em silencio e o produto nasceria com estoque 0 (fonte unica).
               const { error: movErr } = await sb.from("movimentacoes").insert({
@@ -6946,6 +6991,7 @@ compreendeu e concorda integralmente com este Termo.</pre
           input.select()
           return
         }
+        // @erro: estilo e scripts inline no html
         if (matches.length === 1) {
           pdvAddItem(matches[0])
           input.value = ""
@@ -6961,7 +7007,7 @@ compreendeu e concorda integralmente com este Termo.</pre
             k,
           ) => `<div onclick='pdvPickFromModal(${k.id})' style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
         <div><strong>${esc(rotuloChave(k))}</strong> · ${esc(nomeFabricante(k.fabricante_id))}<div style="font-size:12px;color:var(--muted)">${esc(k.descricao)}</div></div>
-        <div style="text-align:right"><strong>${fmt(k.preco_venda)}</strong><div style="font-size:11px;color:var(--muted)">estoque: ${k.estoque}</div></div>
+        <div style="text-align:right"><strong>${fmt(k.preco_venda)}</strong>${k.tipo_produto === "servico" ? "" : `<div style="font-size:11px;color:var(--muted)">estoque: ${k.estoque}</div>`}</div>
       </div>`,
         )
         .join("")}`,
@@ -7053,7 +7099,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         <div class="pinfo">
           ${it.imagem ? `<img src="${it.imagem}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:5px;float:left;margin-right:8px">` : ""}
           <div class="pname">${esc(it.descricao)}</div>
-          <div class="pcode">${it.codigo ? `Cód: ${esc(it.codigo)} · ` : ""}${semEstoque ? `<span style="color:var(--danger)">⚠️ estoque: ${it.estoque}</span>` : `estoque: ${it.estoque}`}</div>
+          <div class="pcode">${it.codigo ? `Cód: ${esc(it.codigo)} · ` : ""}${semEstoque && it.tipo_produto !== "servico" ? `<span style="color:var(--danger)">⚠️ estoque: ${it.estoque}</span>` : `estoque: ${it.estoque}`}</div>
         </div>
         <div class="pdv-qty">
           <button onclick="pdvSetQty(${i}, ${it.quantidade - 1})">−</button>
@@ -7140,7 +7186,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         // Serviço (mão de obra) não controla estoque: nunca entra no aviso de
         // estoque insuficiente.
         const semEstoque = PDV_CART.filter(
-          (it) => it.tipo_produto !== "servico" && it.quantidade > it.estoque,
+          (it) => it.quantidade > it.estoque && it.tipo_produto !== "servico",
         )
         if (semEstoque.length) {
           const lista = semEstoque
@@ -7295,10 +7341,13 @@ compreendeu e concorda integralmente com este Termo.</pre
 
             // 2. registra as movimentações de saída (fonte única do estoque).
             for (const it of itens) {
+            // @erro: nome de variável não semântico
+            // @sugestao: varra todo o código e corrija
+            // @sugestao: programa tem mais de uma condição não legível
+            // "if (k)". Melhore elas
               const k = CACHE.chaves.find((x) => x.id == it.chave_id)
               // Serviço (mão de obra) não movimenta estoque: pula a baixa.
-              if (k && k.tipo_produto === "servico") continue
-              if (k) {
+              if (k && k.tipo_produto !== "servico") {
                 const { error: movErr } = await sb
                   .from("movimentacoes")
                   .insert({
@@ -7784,7 +7833,7 @@ compreendeu e concorda integralmente com este Termo.</pre
                 k,
               ) => `<div class="cust-opt" onclick="osItemPick(${i}, '${k.id}')">
       ${k.codigo ? esc(k.codigo) + " · " : ""}${esc(nomeFabricante(k.fabricante_id))} · ${esc(k.descricao)}
-      <div class="ph">${fmt(k.preco_venda)} · estoque: ${k.estoque}</div></div>`,
+      <div class="ph">${fmt(k.preco_venda)}${k.tipo_produto === "servico" ? "" : ` · estoque: ${k.estoque}`}</div></div>`,
             )
             .join("")
         } else if (term) {
@@ -8009,8 +8058,7 @@ compreendeu e concorda integralmente com este Termo.</pre
                 if (!it.chave_id) continue
                 const k = CACHE.chaves.find((x) => x.id == it.chave_id)
                 // Serviço (mão de obra) não movimenta estoque: pula a baixa.
-                if (k && k.tipo_produto === "servico") continue
-                if (k) {
+                if (k && k.tipo_produto !== "servico") {
                   const { error: movErr } = await sb
                     .from("movimentacoes")
                     .insert({
@@ -8034,10 +8082,13 @@ compreendeu e concorda integralmente com este Termo.</pre
             // estorna estoque se a OS concluída foi CANCELADA (devolve as peças).
             if (status === "cancelado" && jaConcluida) {
               const { data: movsSaida } = await sb
-                .from("movimentacoes")
-                .select("chave_id,quantidade")
-                .eq("servico_id", osId)
-                .eq("tipo", "saida")
+              .from("movimentacoes_estoque")
+              .select(
+                "chave_id,quantidade, produtos!chave_id!inner(tipo_produto)",
+              )
+              .eq("servico_id", osId)
+              .eq("tipo", "saida")
+              .neq("produtos.tipo_produto", "servico")
               for (const m of movsSaida || []) {
                 if (!m.chave_id) continue
                 const { error: movErr } = await sb.from("movimentacoes").insert({
@@ -8194,10 +8245,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         ? `<button class="btn" style="background:var(--ok,#0a8754)" onclick="osDarBaixa(${s.id})">✓ Dar baixa (recebido)</button>`
         : ""
     }
-    ${
-      s.status === "concluido"
-        ? '<span style="font-size:12px;color:var(--muted);align-self:center;padding:0 8px">🔒 OS concluída (não editável)</span>'
-        : `<button class="btn" onclick="closeModal();osForm(${s.id})">Editar</button>`
+    <button class="btn" onclick="closeModal();osForm(${s.id})">Editar</button>
     }
   `,
         )
@@ -8316,7 +8364,9 @@ compreendeu e concorda integralmente com este Termo.</pre
               for (const it of s.itens || []) {
                 if (!it.chave_id) continue
                 const k = CACHE.chaves.find((x) => x.id == it.chave_id)
-                if (k) k.estoque = k.estoque - it.quantidade
+                if (typeof k !== "undefined" && k.tipo_produto === "servico") {
+                  k.estoque = k.estoque - it.quantidade
+                }
               }
             }
           } else {
@@ -8425,10 +8475,13 @@ compreendeu e concorda integralmente com este Termo.</pre
           // Estorna o estoque: para cada SAÍDA que esta OS gerou, cria uma ENTRADA que a
           // contradiz (devolve a peça ao estoque) e deixa registro. O trigger recalcula.
           const { data: movs } = await sb
-            .from("movimentacoes")
-            .select("chave_id,quantidade")
+            .from("movimentacoes_estoque")
+            .select(
+              "chave_id,quantidade, produtos!chave_id!inner(tipo_produto)",
+            )
             .eq("servico_id", id)
             .eq("tipo", "saida")
+            .neq("produtos.tipo_produto", "servico")
           for (const m of movs || []) {
             if (!m.chave_id) continue
             // if(error) throw: o estorno ao excluir nao pode falhar em silencio
@@ -8731,7 +8784,10 @@ compreendeu e concorda integralmente com este Termo.</pre
       // movimentação manual de estoque (chamada da tela de chaves)
       function estoqueMovForm(chaveId) {
         const k = CACHE.chaves.find((x) => x.id == chaveId)
-        if (!k) return
+        if (typeof k === "undefined" || k.tipo_produto === "servico") {
+          toast("produtos do tipo serviço não têm estoque", "err")
+          return
+        }
         openModal(
           "Movimentar Estoque: " + esc(rotuloChave(k)),
           `
@@ -8762,6 +8818,14 @@ compreendeu e concorda integralmente com este Termo.</pre
           return
         }
         const k = CACHE.chaves.find((x) => x.id == chaveId)
+        if (typeof k === "undefined") {
+          toast("produto inválido", "err")
+          return
+        }
+        if (k.tipo_produto === "servico") {
+          toast("produtos do tipo serviço não podem ter estoque", "err")
+          return
+        }
         const atual = Number(k.estoque) || 0
         const descricao = ($("estMotivo").value || "").trim()
 
