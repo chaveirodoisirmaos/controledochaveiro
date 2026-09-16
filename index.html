@@ -3113,7 +3113,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         const carregadores = [
           typeof carregarClientes === "function" ? carregarClientes : null,
           typeof carregarChaves === "function" ? carregarChaves : null,
-          typeof carregarServicos === "function" ? carregarServicos : null,
+          typeof carregarOrdensDeServico === "function" ? carregarOrdensDeServico : null,
           typeof carregarTransacoes === "function" ? carregarTransacoes : null,
           typeof carregarMovimentacoes === "function"
             ? carregarMovimentacoes
@@ -5010,7 +5010,8 @@ compreendeu e concorda integralmente com este Termo.</pre
         await lerComEspelho(consultar, "clientes", aplicar)
         return CACHE.clientes
       }
-      async function carregarServicos() {
+
+      async function carregarOrdensDeServico() {
         function consultar() {
           return sb
             .from("servicos")
@@ -5018,24 +5019,68 @@ compreendeu e concorda integralmente com este Termo.</pre
             .order("id", { ascending: false })
         }
         function aplicar(dados) {
-          CACHE.servicos = dados || []
+          const valor = dados ?? []
+          if (Array.isArray(valor) !== true) {
+            return valor
+          }
+          for (const item of valor) {
+            Object.setPrototypeOf(
+              item,
+              {
+                get resumoDosItens() {
+                  let valor = null
+                  valor = obterResumoDosItensDaOrdemDeServico(this ?? null)
+                  return valor
+                },
+              }
+            )
+          }
+          CACHE.servicos = valor
         }
+
         await lerComEspelho(consultar, "servicos", aplicar)
         return CACHE.servicos
       }
+
       async function carregarTransacoes() {
         function consultar() {
-          return sb
-            .from("transacoes")
-            .select("*")
-            .order("id", { ascending: false })
+          const valor = sb
+          .from("transacoes")
+          .select("*")
+          .order("id", { ascending: false })
+          return valor
         }
         function aplicar(dados) {
-          CACHE.transacoes = dados || []
+          const valor = dados ?? []
+          if (Array.isArray(valor)) {
+            for (const item of valor) {
+              Object.setPrototypeOf(
+                item,
+                {
+                  get ordemDeServicoDeOrigem() {
+                    let valor = null
+                    const { servico_id: idDaOrdemDeServicoDeOrigem = null } = this ?? {}
+                    if (idDaOrdemDeServicoDeOrigem === null) {
+                      return valor
+                    }
+                    valor = (CACHE.servicos ?? []).find(function obterOrdemDeServicoDeOrigem(ordemDeServico) {
+                      if (ordemDeServico.id === idDaOrdemDeServicoDeOrigem) {
+                        return true
+                      }
+                      return false
+                    })
+                    return valor
+                  },
+                }
+              )
+            }
+          }
+          CACHE.transacoes = valor
         }
         await lerComEspelho(consultar, "transacoes", aplicar)
         return CACHE.transacoes
       }
+
       async function carregarMovimentacoes() {
       // @erro: uso ambíguo de view movimentacoes e tabela movimentacoes_estoque
         function consultar() {
@@ -5218,7 +5263,7 @@ compreendeu e concorda integralmente com este Termo.</pre
     <div id="dashContent"><div class="loading-inline"><span class="spinner"></span>Carregando...</div></div>`
         try {
           await Promise.all([
-            carregarServicos(),
+            carregarOrdensDeServico(),
             carregarTransacoes(),
             carregarChaves(),
             carregarFabricantes(),
@@ -6054,7 +6099,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         // @erro: campos fabricante e unidade de medida não fazem sentido para
         // produtos do tipo serviço
         // @erro: renderização condicional exige que o programa
-        // renderize novamente ao mudar o tipo do produto      
+        // renderize novamente ao mudar o tipo do produto
         const abrir = contexto ? openModal2 : openModal
         abrir(
           edit ? "Editar Produto" : "Novo Produto",
@@ -7515,7 +7560,7 @@ compreendeu e concorda integralmente com este Termo.</pre
     <div id="osList"><div class="loading-inline"><span class="spinner"></span>Carregando...</div></div>`
         try {
           await Promise.all([
-            carregarServicos(),
+            carregarOrdensDeServico(),
             carregarClientes(),
             carregarChaves(),
             carregarFuncionariosCache(),
@@ -7541,7 +7586,7 @@ compreendeu e concorda integralmente com este Termo.</pre
       // Resumo dos itens da OS/venda para a lista: mostra ate N produtos
       // (configuravel, padrao 2) e, se houver mais, reticencias + um botao para
       // abrir a ordem completa.
-      function osResumoItens(s) {
+      function obterResumoDosItensDaOrdemDeServico(s) {
         const itens = (s.itens || []).filter((it) => it && it.descricao)
         if (!itens.length) return ""
         const limite = qtdItensResumo()
@@ -7585,7 +7630,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         (s) => `<tr>
       <td><strong>#${s.id}</strong>${s._offlinePendente ? ' <span class="badge b-pendente" title="Salvo no aparelho — aguardando sincronizar">⏳</span>' : ""}</td>
       <td>${esc(nomeCliente(s.cliente_id) || "-")}</td>
-      <td>${esc(s.titulo)}${osResumoItens(s)}</td>
+      <td>${esc(s.titulo)}${obterResumoDosItensDaOrdemDeServico(s)}</td>
       <td><span class="badge b-${s.status}">${s.status.replace("_", " ")}</span></td>
       <td><span class="badge b-${s.status_pagamento}">${s.status_pagamento}</span></td>
       <td>${fmt(s.total)}</td>
@@ -8168,7 +8213,7 @@ compreendeu e concorda integralmente com este Termo.</pre
 
           closeModal()
           toast(editId ? "OS atualizada" : `OS #${osId} criada`)
-          await carregarServicos()
+          await carregarOrdensDeServico()
           renderServicos()
         } catch (e) {
           console.error(e)
@@ -8445,7 +8490,7 @@ compreendeu e concorda integralmente com este Termo.</pre
 
           toast("Baixa registrada — pagamento recebido")
           closeModal()
-          await carregarServicos()
+          await carregarOrdensDeServico()
           await carregarChaves().catch(() => {})
           await carregarTransacoes().catch(() => {})
           renderServicos()
@@ -8514,7 +8559,7 @@ compreendeu e concorda integralmente com este Termo.</pre
           if (osDelErr) throw osDelErr
           toast("OS excluída")
           closeModal()
-          await carregarServicos()
+          await carregarOrdensDeServico()
           renderServicos()
         } catch (e) {
           console.error(e)
@@ -8905,28 +8950,29 @@ compreendeu e concorda integralmente com este Termo.</pre
       <input id="txDe" type="date">
       <input id="txAte" type="date">
       <select id="txTipo"><option value="">Todos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option></select>
-      <select id="txFunc" onchange="renderFinanceiro()"><option value="">Todos funcionários</option></select>
-      <select id="txForma" onchange="renderFinanceiro()"><option value="">Todas as formas</option></select>
-      <select id="txOrigem" onchange="renderFinanceiro()"><option value="">OS e financeiro</option><option value="os">Só de vendas/OS</option><option value="avulso">Só financeiro avulso</option></select>
-      <select id="txStatusPag" onchange="renderFinanceiro()"><option value="">Pagos e pendentes</option><option value="pago">Só pagos/recebidos</option><option value="pendente">Só pendentes (a pagar/receber)</option></select>
-      <button class="btn btn-sec" onclick="renderFinanceiro()">Filtrar</button>
+      <select id="txFunc" onchange="renderizarModuloFinanceiro()"><option value="">Todos funcionários</option></select>
+      <select id="txForma" onchange="renderizarModuloFinanceiro()"><option value="">Todas as formas</option></select>
+      <select id="txOrigem" onchange="renderizarModuloFinanceiro()"><option value="">OS e financeiro</option><option value="os">Só de vendas/OS</option><option value="avulso">Só financeiro avulso</option></select>
+      <select id="txStatusPag" onchange="renderizarModuloFinanceiro()"><option value="">Pagos e pendentes</option><option value="pago">Só pagos/recebidos</option><option value="pendente">Só pendentes (a pagar/receber)</option></select>
+      <button class="btn btn-sec" onclick="renderizarModuloFinanceiro()">Filtrar</button>
     </div>
     <div id="txStats"></div>
     <div id="txList"><div class="loading-inline"><span class="spinner"></span>Carregando...</div></div>`
         try {
           await Promise.all([
+            carregarOrdensDeServico(),
             carregarTransacoes(),
             carregarFuncionariosCache(),
             carregarFormas(),
           ])
-          renderFinanceiro()
+          renderizarModuloFinanceiro()
         } catch (e) {
           console.error(e)
           $("txList").innerHTML =
             '<div class="empty"><span class="icon">⚠️</span>Erro ao carregar. Verifique sua conexão.</div>'
         }
       }
-      function renderFinanceiro() {
+      function renderizarModuloFinanceiro() {
         // popula selects de funcionário e forma (só na 1ª vez)
         const selFunc = $("txFunc")
         if (selFunc && selFunc.options.length === 1) {
@@ -9012,34 +9058,41 @@ compreendeu e concorda integralmente com este Termo.</pre
         }
         $("txList").innerHTML = `<table>
     <thead><tr><th>Data</th><th>Vencimento</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>OS</th><th>Forma</th><th>Situação</th><th>Valor</th><th>Funcionário</th><th></th></tr></thead>
-    <tbody>${lista
-      .map(
-        (t) => `<tr>
-      <td>${fmtData(t.criado_em)}</td>
-      <td>${t.data_vencimento ? fmtData(t.data_vencimento) : ""}</td>
-      <td><span class="badge ${t.tipo === "entrada" ? "b-concluido" : "b-cancelado"}">${t.tipo}</span></td>
-      <td>${esc(t.descricao)}</td>
-      <td>${esc(t.categoria || "")}</td>
-      <td>${t.servico_id ? `#${t.servico_id}` : ""}</td>
-      <td>${esc(t.forma_pagamento || "")}</td>
-      <td>${
-        estaPago(t)
-          ? '<span class="badge b-concluido">Pago</span>'
-          : '<span class="badge b-cancelado">Pendente</span>'
-      }</td>
-      <td style="color:${t.tipo === "entrada" ? "var(--ok)" : "var(--warn)"};font-weight:600">${fmt(t.valor)}${
-        t.tipo === "entrada" && liquidoTransacao(t) < Number(t.valor)
-          ? `<div style="font-size:11px;color:var(--muted);font-weight:400" title="Valor líquido após a taxa da forma de pagamento">líquido ${fmt(liquidoTransacao(t))}</div>`
-          : ""
-      }</td>
-      <td>${esc(nomeFuncionario(t.funcionario_id))}</td>
-      <td class="actions">${
-        estaPago(t)
-          ? ""
-          : `<button class="btn btn-sec btn-sm" onclick="txMarcarPago(${t.id})" title="Marcar como pago/recebido">✓</button>`
-      }<button class="btn btn-danger btn-sm" onclick="txExcluir(${t.id})" title="Excluir lançamento">🗑️</button></td>
-    </tr>`,
-      )
+    <tbody>${lista.map(
+      function mapearTransacoes(t) {
+        let conteudoDoElementoDescricao = esc(t.descricao)
+        const ordemDeServicoDeOrigem = t?.ordemDeServicoDeOrigem ?? null
+        const resumoDosItensDaOrdemDeServicoDeOrigem = ordemDeServicoDeOrigem?.resumoDosItens ?? ""
+        if (resumoDosItensDaOrdemDeServicoDeOrigem !== "") {
+          conteudoDoElementoDescricao = esc(resumoDosItensDaOrdemDeServicoDeOrigem)
+        }
+        return `<tr>
+        <td>${fmtData(t.criado_em)}</td>
+        <td>${t.data_vencimento ? fmtData(t.data_vencimento) : ""}</td>
+        <td><span class="badge ${t.tipo === "entrada" ? "b-concluido" : "b-cancelado"}">${t.tipo}</span></td>
+        <td>${conteudoDoElementoDescricao}</td>
+        <td>${esc(t.categoria || "")}</td>
+        <td>${t.servico_id ? `#${t.servico_id}` : ""}</td>
+        <td>${esc(t.forma_pagamento || "")}</td>
+        <td>${
+          estaPago(t)
+            ? '<span class="badge b-concluido">Pago</span>'
+            : '<span class="badge b-cancelado">Pendente</span>'
+        }</td>
+        <td style="color:${t.tipo === "entrada" ? "var(--ok)" : "var(--warn)"};font-weight:600">${fmt(t.valor)}${
+          t.tipo === "entrada" && liquidoTransacao(t) < Number(t.valor)
+            ? `<div style="font-size:11px;color:var(--muted);font-weight:400" title="Valor líquido após a taxa da forma de pagamento">líquido ${fmt(liquidoTransacao(t))}</div>`
+            : ""
+        }</td>
+        <td>${esc(nomeFuncionario(t.funcionario_id))}</td>
+        <td class="actions">${
+          estaPago(t)
+            ? ""
+            : `<button class="btn btn-sec btn-sm" onclick="txMarcarPago(${t.id})" title="Marcar como pago/recebido">✓</button>`
+        }<button class="btn btn-danger btn-sm" onclick="txExcluir(${t.id})" title="Excluir lançamento">🗑️</button></td>
+        </tr>`
+      },
+     )
       .join("")}</tbody></table>`
         applyTableLabels()
       }
@@ -9219,7 +9272,7 @@ compreendeu e concorda integralmente com este Termo.</pre
               : "Lançamento registrado",
           )
           await carregarTransacoes()
-          renderFinanceiro()
+          renderizarModuloFinanceiro()
         } catch (e) {
           console.error(e)
           toast("Erro ao salvar", "err")
@@ -9241,7 +9294,7 @@ compreendeu e concorda integralmente com este Termo.</pre
           if (resposta.error) throw resposta.error
           toast("Marcado como pago")
           await carregarTransacoes()
-          renderFinanceiro()
+          renderizarModuloFinanceiro()
         } catch (e) {
           console.error(e)
           toast("Erro ao atualizar", "err")
@@ -9261,7 +9314,7 @@ compreendeu e concorda integralmente com este Termo.</pre
           if (error) throw error
           toast("Lançamento excluído")
           await carregarTransacoes()
-          renderFinanceiro()
+          renderizarModuloFinanceiro()
         } catch (e) {
           console.error(e)
           toast("Erro ao excluir", "err")
@@ -9527,7 +9580,7 @@ compreendeu e concorda integralmente com este Termo.</pre
     <div id="relContent"><div class="loading-inline"><span class="spinner"></span>Carregando...</div></div>`
         try {
           await Promise.all([
-            carregarServicos(),
+            carregarOrdensDeServico(),
             carregarTransacoes(),
             carregarFuncionariosCache(),
             carregarChaves(),
@@ -10386,7 +10439,7 @@ compreendeu e concorda integralmente com este Termo.</pre
           <div>${esc(it.descricao)}</div>
           <div style="display:flex;justify-content:space-between">
             <span>${it.quantidade}
-            ${(it.unidade_medida || "UN").toUpperCase()} 
+            ${(it.unidade_medida || "UN").toUpperCase()}
             x ${fmt(it.preco_unit)}</span><span style="font-weight:700">${fmt(it.total)}</span>
           </div></div>`,
           )
