@@ -7684,11 +7684,6 @@ compreendeu e concorda integralmente com este Termo.</pre
         let s
         if (edit) {
           s = CACHE.servicos.find((x) => x.id == editId)
-          // OS concluída não pode ser editada (trava contábil)
-          if (s && s.status === "concluido") {
-            toast("OS concluída não pode ser editada", "err")
-            return
-          }
           OS_ITENS = JSON.parse(JSON.stringify(s.itens || []))
         } else {
           s = {
@@ -7971,14 +7966,6 @@ compreendeu e concorda integralmente com este Termo.</pre
         if (!titulo) {
           toast("Título é obrigatório", "err")
           return
-        }
-        // Defesa: se a OS já estava concluída no banco, não permite alterar
-        if (editId) {
-          const orig = CACHE.servicos.find((x) => x.id == editId)
-          if (orig && orig.status === "concluido") {
-            toast("OS concluída não pode ser alterada", "err")
-            return
-          }
         }
         const itens = OS_ITENS.filter((it) => it.descricao || it.chave_id).map(
           (it) => ({
