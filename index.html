@@ -1119,6 +1119,38 @@
       body.printing .modal-bg {
         display: none !important;
       }
+
+      .transacao_com_ordem_de_servico_de_origem {
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+
+      .transacao_com_ordem_de_servico_de_origem td:first-child {
+        border-left: 3px solid rgba(30, 37, 196, 0.4);
+      }
+
+      .transacao_com_ordem_de_servico_de_origem:hover {
+        background-color: rgba(30, 37, 196, 0.06);
+      }
+
+      .transacao_com_ordem_de_servico_de_origem .etiqueta {
+        display: none;
+        position: absolute;
+        background-color: rgba(23,32,45,0.95);
+        color: rgba(255,255,255,1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+
+      .transacao_com_ordem_de_servico_de_origem:hover .etiqueta,
+      .transacao_com_ordem_de_servico_de_origem:focus-within .etiqueta,
+      .transacao_com_ordem_de_servico_de_origem .etiqueta.mostrar {
+        display: inline-block;
+      }
+
       @media print {
         #toast,
         .modal-bg {
@@ -7597,7 +7629,7 @@ compreendeu e concorda integralmente com este Termo.</pre
         const temMais = itens.length > limite
         const reticencias = temMais ? "…" : ""
         const botao = temMais
-          ? ` <button class="btn btn-sec btn-sm" style="padding:1px 6px;font-size:11px" onclick="osView(${s.id})">ver ordem (${itens.length} itens)</button>`
+          ? ` <button class="btn btn-sec btn-sm" style="padding:1px 6px;font-size:11px" onclick="visualizarOrdemDeServico(${s.id})">ver ordem (${itens.length} itens)</button>`
           : ""
         return `<div style="font-size:12px;color:var(--muted);margin-top:2px">${primeiros}${reticencias}${botao}</div>`
       }
@@ -7636,7 +7668,7 @@ compreendeu e concorda integralmente com este Termo.</pre
       <td>${fmt(s.total)}</td>
       <td>${esc(nomeFuncionario(s.funcionario_id))}</td>
       <td>${fmtDataCurta(s.criado_em)}</td>
-      <td class="actions"><button class="btn btn-sec btn-sm" onclick="osView(${s.id})">Ver</button>${
+      <td class="actions"><button class="btn btn-sec btn-sm" onclick="visualizarOrdemDeServico(${s.id})">Ver</button>${
         ["fiado", "pendente", "parcial"].includes(s.status_pagamento)
           ? `<button class="btn btn-sm" style="background:var(--ok,#0a8754)" onclick="osDarBaixa(${s.id})">✓ Baixa</button>`
           : ""
@@ -8237,7 +8269,7 @@ compreendeu e concorda integralmente com este Termo.</pre
           console.warn("Falha ao registrar histórico da OS:", e)
         }
       }
-      function osView(id) {
+      function visualizarOrdemDeServico(id) {
         const s = CACHE.servicos.find((x) => x.id == id)
         if (!s) return
         const c = CACHE.clientes.find((x) => x.id == s.cliente_id)
@@ -9066,11 +9098,64 @@ compreendeu e concorda integralmente com este Termo.</pre
         if (resumoDosItensDaOrdemDeServicoDeOrigem !== "") {
           conteudoDoElementoDescricao = esc(resumoDosItensDaOrdemDeServicoDeOrigem)
         }
-        return `<tr>
+        let parametrosDeCampoComOrdemDeServicoDeOrigem = null
+        let elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem = null
+        let idEtiquetaVisualizarOrdemDeServico = null
+        if ((ordemDeServicoDeOrigem ?? null) !== null) {
+          const id = ordemDeServicoDeOrigem?.id ?? null
+          parametrosDeCampoComOrdemDeServicoDeOrigem = ""
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "class=\"transacao_com_ordem_de_servico_de_origem\""
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "ondblclick=\"if"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "((event?.target?.closest('button')"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "??"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "null)"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "!=="
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "null"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += ")"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "{"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "return"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "}"
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "visualizarOrdemDeServico(" + id + ")\""
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          idEtiquetaVisualizarOrdemDeServico = "etiqueta_visualizar_ordem_de_servico_" + (id ?? "desconhecida")
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "aria-describedby=\"" + idEtiquetaVisualizarOrdemDeServico + "\""
+          parametrosDeCampoComOrdemDeServicoDeOrigem += " "
+          parametrosDeCampoComOrdemDeServicoDeOrigem += "tabindex=\"0\""
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem = ""
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += "<span"
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += " "
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += "class=\"etiqueta\""
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += " "
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += "role=\"tooltip\""
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += " "
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += "id=\"" + idEtiquetaVisualizarOrdemDeServico + "\""
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += ">"
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += "CLIQUE DUAS VEZES PARA VISUALIZAR A ORDEM DE SERVIÇO DE ORIGEM"
+          elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem += "</span>"
+        }
+        return `<tr ${
+          parametrosDeCampoComOrdemDeServicoDeOrigem ?? ""
+        }>
         <td>${fmtData(t.criado_em)}</td>
         <td>${t.data_vencimento ? fmtData(t.data_vencimento) : ""}</td>
         <td><span class="badge ${t.tipo === "entrada" ? "b-concluido" : "b-cancelado"}">${t.tipo}</span></td>
-        <td>${conteudoDoElementoDescricao}</td>
+        <td>
+          ${
+            elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem ?? ""
+          }
+          ${conteudoDoElementoDescricao}
+        </td>
         <td>${esc(t.categoria || "")}</td>
         <td>${t.servico_id ? `#${t.servico_id}` : ""}</td>
         <td>${esc(t.forma_pagamento || "")}</td>
@@ -10908,8 +10993,57 @@ compreendeu e concorda integralmente com este Termo.</pre
           localStorage.removeItem("chaveiro_sessao")
         }
         $("loginUser").focus()
-      }
 
+        // código exclusivo desta instalação
+        let temporizadorDeToqueLongo = null
+        let elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem = null
+        function observarToqueLongo(evento) {
+          const elementoDeTransacaoComOrdemDeServicoDeOrigem = evento?.target?.closest(".transacao_com_ordem_de_servico_de_origem") ?? null
+          if (elementoDeTransacaoComOrdemDeServicoDeOrigem === null) {
+            return
+          }
+          const existeElementoBotaoProximo = (evento?.target?.closest("button") ?? null) !== null
+          if (existeElementoBotaoProximo === true) {
+            return
+          }
+          elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem = elementoDeTransacaoComOrdemDeServicoDeOrigem?.querySelector(".etiqueta") ?? null
+          if (elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem === null) {
+            return
+          }
+          temporizadorDeToqueLongo = setTimeout(function tratarToqueLongo() {
+            elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem.classList.add("mostrar")
+          }, 500)
+        }
+        function removerObservadorToqueLongo() {
+          if (temporizadorDeToqueLongo !== null) {
+            clearTimeout(temporizadorDeToqueLongo)
+            temporizadorDeToqueLongo = null
+          }
+          if (elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem !== null) {
+            elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem.classList.remove("mostrar")
+            elementoEtiquetaParaMostrarOrdemDeServicoDeOrigem = null
+          }
+        }
+        document.addEventListener(
+          "touchstart",
+          observarToqueLongo,
+          {
+            passive: true
+          }
+        )
+        document.addEventListener(
+          "touchend",
+          removerObservadorToqueLongo
+        )
+        document.addEventListener(
+          "touchmove",
+          removerObservadorToqueLongo
+        )
+        document.addEventListener(
+          "touchcancel",
+          removerObservadorToqueLongo
+        )
+      }
       init()
     </script>
   </body>
