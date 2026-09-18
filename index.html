@@ -9079,11 +9079,11 @@ compreendeu e concorda integralmente com este Termo.</pre
     <thead><tr><th>Data</th><th>Vencimento</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>OS</th><th>Forma</th><th>Situação</th><th>Valor</th><th>Funcionário</th><th></th></tr></thead>
     <tbody>${lista.map(
       function mapearTransacoes(t) {
-        let conteudoDoElementoDescricao = esc(t.descricao)
+        let conteudoDoElementoDescricao = esc(t?.descricao ?? "")
         const ordemDeServicoDeOrigem = t?.ordemDeServicoDeOrigem ?? null
         const resumoDosItensDaOrdemDeServicoDeOrigem = ordemDeServicoDeOrigem?.resumoDosItens ?? ""
         if (resumoDosItensDaOrdemDeServicoDeOrigem !== "") {
-          conteudoDoElementoDescricao = esc(resumoDosItensDaOrdemDeServicoDeOrigem)
+          conteudoDoElementoDescricao += resumoDosItensDaOrdemDeServicoDeOrigem
         }
         let parametrosDeCampoComOrdemDeServicoDeOrigem = null
         let elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem = null
@@ -9141,7 +9141,9 @@ compreendeu e concorda integralmente com este Termo.</pre
           ${
             elementoEtiquetaDaAcaoDeVisualizarOrdemDeServicoDeOrigem ?? ""
           }
-          ${conteudoDoElementoDescricao}
+          ${
+            conteudoDoElementoDescricao
+          }
         </td>
         <td>${esc(t.categoria || "")}</td>
         <td>${t.servico_id ? `#${t.servico_id}` : ""}</td>
