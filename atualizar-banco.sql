@@ -17,6 +17,9 @@
 --   PARTE 3 — corrige 'produtos' uuid residual (se houver)
 -- ============================================================
 
+-- inicia transação referente à atualização
+begin;
+
 -- ============ PARTE 1 — atualizar tudo para a v4 ============
 -- ============================================================
 -- CONTROLE DO CHAVEIRO (MyKey) - ATUALIZACAO COMPLETA ATE A V4
@@ -2610,3 +2613,6 @@ insert into configuracoes (chave, valor) values ('schema_version', '2026082701')
 on conflict (chave) do update set valor = excluded.valor;
 
 notify pgrst, 'reload schema';
+
+-- confirma transação referente à atualização
+commit;
